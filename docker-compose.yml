@@ -1,0 +1,257 @@
+# Atlas Second Brain — full reference stack.
+#
+# This wires together the whole self-hosted stack described in docs/: a
+# reverse proxy + SSO in front of your data sources (Odoo, Nextcloud,
+# Firefly III, Stalwart mail), plus the Second Brain (FTS5+RRF recall/MCP
+# server) and the Cerebras Pulse monitoring cockpit.
+#
+# This is a STARTING POINT, not a turnkey production file: fill in .env
+# (copy from .env.example), point DOMAIN/subdomains at your own host, and
+# read docs/01-vps-foundation.md before you `docker compose up -d`.
+#
+# All images are well-known upstream images — nothing here is custom-built
+# except ./secondbrain and ./cerebras (this repo's own code).
+
+name: atlas-secondbrain-stack
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  edge:        # caddy <-> app front doors
+  data:        # apps <-> their own databases (internal only)
+
+volumes:
+  caddy_data:
+  caddy_config:
+  authentik_db:
+  authentik_redis:
+  odoo_db:
+  odoo_data:
+  nextcloud_db:
+  nextcloud_data:
+  firefly_db:
+  firefly_data:
+  stalwart_data:
+  secondbrain_data:
+  cerebras_data:
+
+services:
+  # ---------------------------------------------------------------- edge
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on: [authentik-server]
+
+  # ------------------------------------------------------------ authentik (SSO)
+  authentik-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${AUTHENTIK_DB_NAME:-authentik}
+      POSTGRES_USER: ${AUTHENTIK_DB_USER:-authentik}
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD:?set AUTHENTIK_DB_PASSWORD in .env}
+    volumes:
+      - authentik_db:/var/lib/postgresql/data
+    networks: [data]
+
+  authentik-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - authentik_redis:/data
+    networks: [data]
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.10
+    command: server
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_DB_NAME:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_DB_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:?set AUTHENTIK_DB_PASSWORD in .env}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY in .env}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
+    volumes:
+      - ./authentik/media:/media
+      - ./authentik/templates:/templates
+    depends_on: [authentik-db, authentik-redis]
+    networks: [edge, data]
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.10
+    command: worker
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_DB_NAME:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_DB_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:?set AUTHENTIK_DB_PASSWORD in .env}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./authentik/media:/media
+      - ./authentik/templates:/templates
+    depends_on: [authentik-db, authentik-redis]
+    networks: [data]
+
+  # ------------------------------------------------------------------ odoo (ERP/tasks)
+  odoo-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${ODOO_DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${ODOO_DB_PASSWORD:?set ODOO_DB_PASSWORD in .env}
+    volumes:
+      - odoo_db:/var/lib/postgresql/data
+    networks: [data]
+
+  odoo:
+    image: odoo:17
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      HOST: odoo-db
+      USER: ${ODOO_DB_USER:-odoo}
+      PASSWORD: ${ODOO_DB_PASSWORD:?set ODOO_DB_PASSWORD in .env}
+    volumes:
+      - odoo_data:/var/lib/odoo
+      - ./odoo/config:/etc/odoo
+      - ./odoo/addons:/mnt/extra-addons
+    depends_on: [odoo-db]
+    networks: [edge, data]
+
+  # ------------------------------------------------------------ nextcloud (files)
+  nextcloud-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME:-nextcloud}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD:?set NEXTCLOUD_DB_PASSWORD in .env}
+    volumes:
+      - nextcloud_db:/var/lib/postgresql/data
+    networks: [data]
+
+  nextcloud:
+    image: nextcloud:apache
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_HOST: nextcloud-db
+      POSTGRES_DB: ${NEXTCLOUD_DB_NAME:-nextcloud}
+      POSTGRES_USER: ${NEXTCLOUD_DB_USER:-nextcloud}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_DB_PASSWORD:?set NEXTCLOUD_DB_PASSWORD in .env}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.${DOMAIN:-your-domain.tld}
+      OVERWRITEPROTOCOL: https
+    volumes:
+      - nextcloud_data:/var/www/html
+    depends_on: [nextcloud-db]
+    networks: [edge, data]
+
+  # ------------------------------------------------------------ firefly iii (finance)
+  firefly-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${FIREFLY_DB_NAME:-firefly}
+      POSTGRES_USER: ${FIREFLY_DB_USER:-firefly}
+      POSTGRES_PASSWORD: ${FIREFLY_DB_PASSWORD:?set FIREFLY_DB_PASSWORD in .env}
+    volumes:
+      - firefly_db:/var/lib/postgresql/data
+    networks: [data]
+
+  firefly:
+    image: fireflyiii/core:latest
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      APP_KEY: ${FIREFLY_APP_KEY:?set FIREFLY_APP_KEY in .env (32 random chars)}
+      DB_CONNECTION: pgsql
+      DB_HOST: firefly-db
+      DB_DATABASE: ${FIREFLY_DB_NAME:-firefly}
+      DB_USERNAME: ${FIREFLY_DB_USER:-firefly}
+      DB_PASSWORD: ${FIREFLY_DB_PASSWORD:?set FIREFLY_DB_PASSWORD in .env}
+      APP_URL: https://firefly.${DOMAIN:-your-domain.tld}
+      TRUSTED_PROXIES: "**"
+    volumes:
+      - firefly_data:/var/www/html/storage/upload
+    depends_on: [firefly-db]
+    networks: [edge, data]
+
+  # ------------------------------------------------------------ stalwart (mail, JMAP)
+  stalwart:
+    image: stalwartlabs/mail-server:latest
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "25:25"     # SMTP
+      - "465:465"   # SMTPS
+      - "993:993"   # IMAPS
+    volumes:
+      - stalwart_data:/opt/stalwart-mail
+      - ./stalwart/config:/opt/stalwart-mail/etc
+    networks: [edge]
+
+  # ------------------------------------------------------------ second brain (FTS5+RRF, MCP)
+  secondbrain:
+    build: ./secondbrain
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:?set OLLAMA_URL in .env, e.g. http://host.docker.internal:11434}
+      OLLAMA_URL_FALLBACK: ${OLLAMA_URL_FALLBACK:-}
+      BRAIN_CODE_WEIGHT: ${BRAIN_CODE_WEIGHT:-0.35}
+      SCRUB_KEEP_PII: ${SCRUB_KEEP_PII:-1}
+    volumes:
+      - secondbrain_data:/data
+    networks: [edge]
+
+  # ------------------------------------------------------------ cerebras pulse (cockpit)
+  cerebras:
+    build: ./cerebras
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      CEREBRAS_CONNECTORS: /app/connectors.yaml
+      CEREBRAS_DATA_DIR: /data
+      CEREBRAS_MIND_DIR: ${CEREBRAS_MIND_DIR:-/opt/app/mind}
+      STALWART_TLS_HOST: stalwart
+      STALWART_TLS_PORT: "8443"
+      TZ: ${TZ:-Etc/UTC}
+      ODOO_URL: ${ODOO_URL:-}
+      ODOO_DB: ${ODOO_DB:-odoo}
+      ODOO_UID: ${ODOO_UID:-0}
+      ODOO_PASSWORD: ${ODOO_PASSWORD:-}
+      ODOO_PROJECT_ID: ${ODOO_PROJECT_ID:-1}
+      EVOLUTION_APIKEY: ${EVOLUTION_APIKEY:-}
+    volumes:
+      - ./cerebras/connectors.yaml:/app/connectors.yaml:ro
+      - cerebras_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on: [stalwart]
+    networks: [edge]

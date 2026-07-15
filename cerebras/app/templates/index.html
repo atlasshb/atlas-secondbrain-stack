@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerebras · Pulse</title>
+<script src="/static/htmx.min.js"></script>
+<link rel="stylesheet" href="/static/pulse.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> CEREBRAS <span class="sub">pulse</span></div>
+  <div class="meta">
+    <span id="clock" hx-get="/partials/clock" hx-trigger="every 30s" hx-swap="innerHTML">{{ now }}</span>
+    <button class="ghost" hx-post="/refresh" hx-target="#board" hx-swap="innerHTML" hx-indicator="#spin">
+      refresh <span id="spin" class="htmx-indicator">⟳</span>
+    </button>
+  </div>
+</header>
+
+<main id="board" hx-get="/partials/board" hx-trigger="every 30s" hx-swap="innerHTML">
+  {% include "board.html" %}
+</main>
+
+<footer>
+  <span>read-only cockpit · one gated action · log: <a href="/log">action log</a></span>
+  <span>{{ version }}</span>
+</footer>
+</body>
+</html>

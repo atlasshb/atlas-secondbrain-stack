@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/
+devdata/
+env.d/cerebras.env
+.pytest_cache/

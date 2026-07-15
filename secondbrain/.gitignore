@@ -1,0 +1,18 @@
+# Atlas Second Brain — data must NEVER be pushed (corpus + DBs contain ingested content,
+# including chunks the scrub flagged as credential-pattern matches). Code + docs only.
+store/
+corpus/
+corpus_*/
+*.sqlite
+*.sqlite-*
+*.db
+kernel.sqlite
+# runtime / generated
+venv/
+logs/
+__pycache__/
+*.pyc
+*.bak-*
+*.bak
+health.json
+tasks.json

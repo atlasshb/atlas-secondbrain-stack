@@ -1,0 +1,34 @@
+# ── Cerebras Pulse cockpit — Authentik SSO via embedded outpost ──────────────
+# STAGING block (added first; live block added only after REVIEW-gate sign-off).
+# /healthz bypasses forward_auth: independent liveness for monitors (NFR-07).
+
+cerebras-staging.your-domain.tld {
+    route {
+        reverse_proxy /healthz 127.0.0.1:8141
+        reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:8095
+        forward_auth 127.0.0.1:8095 {
+            uri /outpost.goauthentik.io/auth/caddy
+            copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost X-Authentik-Meta-Provider X-Authentik-Meta-App X-Authentik-Meta-Version
+            trusted_proxies private_ranges
+        }
+        reverse_proxy 127.0.0.1:8141
+    }
+    import sec_headers_full
+}
+
+# LIVE block — identical, uncommented at go-live (also update the Authentik
+# provider external_host to https://cerebras.your-domain.tld):
+#
+# cerebras.your-domain.tld {
+#     route {
+#         reverse_proxy /healthz 127.0.0.1:8141
+#         reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:8095
+#         forward_auth 127.0.0.1:8095 {
+#             uri /outpost.goauthentik.io/auth/caddy
+#             copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost X-Authentik-Meta-Provider X-Authentik-Meta-App X-Authentik-Meta-Version
+#             trusted_proxies private_ranges
+#         }
+#         reverse_proxy 127.0.0.1:8141
+#     }
+#     import sec_headers_full
+# }

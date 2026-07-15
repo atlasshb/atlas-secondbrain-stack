@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerebras · Action log</title>
+<link rel="stylesheet" href="/static/pulse.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> CEREBRAS <span class="sub">action log</span></div>
+  <div class="meta"><a href="/" style="color:var(--accent)">← pulse</a></div>
+</header>
+<main>
+  <p style="margin-bottom:14px">
+    Hash chain:
+    {% if intact %}<span class="chain-ok">✔ intact</span>{% else %}<span class="chain-bad">✘ BROKEN</span>{% endif %}
+    <span class="mono">({{ chain_detail }})</span>
+  </p>
+  <table class="log-table">
+    <tr><th>ts</th><th>event</th><th>action</th><th>approval</th><th>by</th><th>detail</th><th>hash</th></tr>
+    {% for r in records %}
+    <tr>
+      <td class="mono">{{ r.ts }}</td>
+      <td><span class="pill {{ 'ok' if r.event in ('executed','verified','approved') else ('crit' if r.event == 'failed' else 'warn') }}">{{ r.event }}</span></td>
+      <td>{{ r.action }}</td>
+      <td class="mono">{{ r.approval_id }}</td>
+      <td>{{ r.by }}</td>
+      <td>{{ r.command or r.reprobe_reason or r.error or '' }}</td>
+      <td class="mono">{{ r.hash[:12] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</main>
+<footer><span>append-only JSONL · sha256 chain</span><span>{{ version }}</span></footer>
+</body>
+</html>

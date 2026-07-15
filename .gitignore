@@ -1,0 +1,35 @@
+# secrets / env
+.env
+*.env
+!*.env.example
+env.d/*.env
+!env.d/*.env.example
+
+# data / databases — never ship ingested content
+data/
+devdata/
+corpus/
+corpus_*/
+store/
+*.db
+*.sqlite
+*.sqlite-*
+kernel.sqlite
+
+# logs
+logs/
+*.log
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# misc
+.DS_Store
+*.bak
+*.bak-*
+.pytest_cache/

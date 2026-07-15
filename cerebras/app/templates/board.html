@@ -1,0 +1,58 @@
+{% if flash %}<div class="flash">⚠ {{ flash }}</div>{% endif %}
+
+{# needs-you strip: crit tiles + pending proposals, above the grid #}
+{% set needs = tiles | selectattr("needs_you") | list %}
+{% if needs or pending %}
+<section class="needs-you">
+  <h2>needs you</h2>
+  {% for p in pending %}
+  <div class="item pending">
+    <span class="pill warn">action pending</span>
+    <strong>{{ p.title }}</strong> — proposed {{ p.age }}
+    <span class="actions">
+      <button class="approve"
+              hx-post="/actions/{{ p.action_id }}/approve"
+              hx-vals='{"proposal_id": "{{ p.id }}"}'
+              hx-target="#board" hx-swap="innerHTML"
+              hx-confirm="Execute now: {{ p.command_label }}?">approve &amp; run</button>
+      <button class="reject"
+              hx-post="/actions/{{ p.action_id }}/reject"
+              hx-vals='{"proposal_id": "{{ p.id }}"}'
+              hx-target="#board" hx-swap="innerHTML">dismiss</button>
+    </span>
+  </div>
+  {% endfor %}
+  {% for t in needs %}
+  <div class="item">
+    <span class="pill {{ t.status }}">{{ t.status }}</span>
+    <strong>{{ t.title }}</strong> — {{ t.reason }}
+    {% if t.action_id and t.id not in proposed_tile_ids %}
+    <span class="actions">
+      <button class="propose"
+              hx-post="/actions/{{ t.action_id }}/propose"
+              hx-target="#board" hx-swap="innerHTML">propose fix</button>
+    </span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="grid">
+  {% for t in tiles %}
+  <div class="tile {{ t.status }}" id="tile-{{ t.id }}">
+    <div class="tile-head">
+      <span class="status-dot"></span>
+      <h3>{{ t.title }}</h3>
+    </div>
+    <p class="reason">{{ t.reason }}</p>
+    <div class="heartbeat" title="recent probe history (old → new)">
+      {% for h in t.history %}<span class="beat {{ h }}"></span>{% endfor %}
+    </div>
+    <div class="times">
+      <span title="last probe">checked {{ t.last_check_h }}</span>
+      <span title="last time this was ok">last good {{ t.last_good_h }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>

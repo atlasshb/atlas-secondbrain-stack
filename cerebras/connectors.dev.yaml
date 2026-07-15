@@ -1,0 +1,64 @@
+# Dev fixtures — run `python tests/dev_seed.py` first, then
+# CEREBRAS_DEV=1 CEREBRAS_CONNECTORS=connectors.dev.yaml CEREBRAS_DATA_DIR=devdata \
+#   uvicorn app.main:app --port 8141
+connectors:
+  - id: bank_sync
+    title: Bank sync (bank -> ledger)
+    probe:
+      kind: json_file
+      params:
+        path: devdata/fixtures/bank_sync_state.json
+        label: bank sync state
+        status_field: band
+        status_map: { ok: ok, warn: warn, critical: crit }
+        time_field: last_check
+        warn_s: 10800
+        crit_s: 25200
+    needs_you_when: [crit]
+
+  - id: odoo_tasks
+    title: Odoo tasks feed (bridge)
+    probe:
+      kind: file_age
+      params: { path: devdata/fixtures/tasks.json, label: tasks.json, warn_s: 1800, crit_s: 7200 }
+
+  - id: stalwart
+    title: Stalwart mail (JMAP + TLS)
+    probe:
+      kind: tls
+      params: { host: 127.0.0.1, port: 65531 }   # nothing listens -> crit, exercises the action
+    needs_you_when: [warn, crit]
+    action: stalwart_restart
+
+  - id: evolution
+    title: WhatsApp (Evolution)
+    probe:
+      kind: json_file
+      params:
+        path: devdata/fixtures/evolution.json
+        label: Evolution 'default'
+        status_field: instance.state
+        status_map: { open: ok, connecting: warn, close: crit }
+    needs_you_when: [crit]
+
+  - id: commerce
+    title: Commerce sensor (webshop)
+    probe:
+      kind: json_file
+      params:
+        path: devdata/fixtures/commerce_state.json
+        label: commerce_state
+        time_field: updated
+        warn_s: 90000
+        crit_s: 180000
+
+  - id: ntfy
+    title: ntfy (ops notifications)
+    probe:
+      kind: json_file
+      params:
+        path: devdata/fixtures/ntfy_health.json
+        label: ntfy
+        status_field: healthy
+        status_map: { "True": ok, "False": crit }
+    needs_you_when: [crit]

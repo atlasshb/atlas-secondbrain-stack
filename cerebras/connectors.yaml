@@ -1,0 +1,76 @@
+# Cerebras Phase 0 — connector definitions (config-as-data).
+# Every connector normalises into {status, last_check, last_good, reason}.
+# Paths are host paths, bind-mounted read-only at identical locations inside
+# the container — adjust to your own layout. ${VARS} come from env.d/cerebras.env.
+
+connectors:
+  - id: bank_sync
+    title: Bank sync (bank -> ledger)
+    probe:
+      kind: json_file
+      params:
+        path: /var/lib/app/bank_sync_state.json
+        label: bank sync state
+        status_field: band
+        status_map: { ok: ok, warn: warn, critical: crit }
+        time_field: last_check
+        warn_s: 10800    # watcher runs 2-hourly; >3h means the watcher itself died
+        crit_s: 25200
+    needs_you_when: [crit]
+
+  - id: odoo_tasks
+    title: Odoo tasks feed (bridge)
+    probe:
+      kind: file_age
+      params:
+        path: /opt/app/data/tasks.json
+        label: tasks.json
+        warn_s: 1800     # bridge runs every 15m
+        crit_s: 7200
+
+  - id: stalwart
+    title: Stalwart mail (JMAP + TLS)
+    probe:
+      kind: multi
+      params:
+        probes:
+          - kind: tcp
+            params: { host: 127.0.0.1, port: 8096, label: "JMAP :8096" }
+          - kind: tls
+            params: { host: 127.0.0.1, port: 8443, warn_days: 7 }
+    needs_you_when: [warn, crit]
+    action: stalwart_restart
+
+  - id: evolution
+    title: WhatsApp (Evolution)
+    probe:
+      kind: http
+      params:
+        url: http://127.0.0.1:8120/instance/connectionState/default
+        label: Evolution 'default'
+        headers: { apikey: "${EVOLUTION_APIKEY}" }
+        json_field: instance.state
+        status_map: { open: ok, connecting: warn, close: crit }
+    needs_you_when: [crit]
+
+  - id: commerce
+    title: Commerce sensor (webshop)
+    probe:
+      kind: json_file
+      params:
+        path: /opt/app/marketing/webshop/automation/commerce_state.json
+        label: commerce_state
+        time_field: updated   # naive local timestamp -> container runs TZ=${TZ}
+        warn_s: 90000         # daily 06:15 cron; 25h warn
+        crit_s: 180000
+
+  - id: ntfy
+    title: ntfy (ops notifications)
+    probe:
+      kind: http
+      params:
+        url: http://127.0.0.1:8136/v1/health
+        label: ntfy
+        json_field: healthy
+        status_map: { "True": ok, "False": crit }
+    needs_you_when: [crit]
