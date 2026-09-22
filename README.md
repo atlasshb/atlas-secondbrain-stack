@@ -93,10 +93,10 @@ bootstrap, which every other piece depends on.
 
 ```
 .
-├── docker-compose.yml       # full reference stack: edge, data sources, brain, pulse
-├── .env.example             # every var ships empty — copy to .env and fill in your own
+├── docker-compose.yml        # full reference stack: edge, data sources, brain, pulse
+├── .env.example              # every var ships empty — copy to .env and fill in your own
 ├── secondbrain/              # the recall engine (brain.py, mcp_server.py, ingestion CLI)
-├── cerebras/                  # Cerebras Pulse: FastAPI + HTMX monitoring cockpit
+├── cerebras/                 # Cerebras Pulse: FastAPI + HTMX monitoring cockpit
 ├── docs/                     # numbered build guides, 01 through 06 (see below)
 ├── SANITIZATION-REPORT.md    # what was genericized when this repo was assembled
 └── LICENSE                   # MIT
